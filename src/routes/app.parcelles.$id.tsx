@@ -15,6 +15,7 @@ import { buildDxf } from "@/lib/dxf";
 import JSZip from "jszip";
 import { buildShapefileZip } from "@/lib/shp";
 import { DEFAULT_GPS_CONFIG, haversine, polygonAreaM2, polygonPerimeterM } from "@/lib/gps";
+import { syncNow, syncRemoved } from "@/lib/sync";
 import type { DeviceProfile, Domaine, GpsPoint, Lot, MeasurementPoint, MeasurementQA, Parcelle, SP } from "@/lib/types";
 import { StatusBadge } from "./app.index";
 

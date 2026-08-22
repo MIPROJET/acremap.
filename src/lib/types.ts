@@ -19,6 +19,7 @@ export interface SP {
   region: string;           // ex: Haut-Sassandra
   departement: string;      // ex: Daloa
   notes?: string;
+  archivedAt?: number | null;
   createdAt: number;
 }
 
@@ -29,6 +30,7 @@ export interface Domaine {
   spId: string;
   description?: string;
   notes?: string;
+  archivedAt?: number | null;
   createdAt: number;
 }
 
@@ -47,6 +49,7 @@ export interface Parcelle {
   ownerPhoto?: string;      // photo du propriétaire
   groupPhoto?: string;      // photo du groupe / famille
   parcellePhoto?: string;   // photo de la parcelle
+  archivedAt?: number | null;
   createdAt: number;
 }
 

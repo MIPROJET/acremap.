@@ -17,7 +17,7 @@ function mapSp(row: SP, userId: string | null) {
   return {
     id: row.id, code: row.code, name: row.name,
     district: row.district ?? null, region: row.region ?? null, departement: row.departement ?? null,
-    notes: row.notes ?? null, created_by: userId,
+    notes: row.notes ?? null, archived_at: toIso(row.archivedAt), created_by: userId,
     created_at: toIso(row.createdAt) ?? new Date().toISOString(),
   };
 }
@@ -25,7 +25,7 @@ function mapDomaine(row: Domaine, userId: string | null) {
   return {
     id: row.id, code: row.code, name: row.name, sp_id: row.spId,
     description: row.description ?? null, notes: row.notes ?? null,
-    created_by: userId, created_at: toIso(row.createdAt) ?? new Date().toISOString(),
+    archived_at: toIso(row.archivedAt), created_by: userId, created_at: toIso(row.createdAt) ?? new Date().toISOString(),
   };
 }
 function mapParcelle(row: Parcelle, userId: string | null) {
@@ -36,7 +36,7 @@ function mapParcelle(row: Parcelle, userId: string | null) {
     convention_status: row.conventionStatus ?? null,
     owner_photo: row.ownerPhoto ?? null, group_photo: row.groupPhoto ?? null,
     parcelle_photo: row.parcellePhoto ?? null,
-    notes: row.notes ?? null, created_by: userId,
+    notes: row.notes ?? null, archived_at: toIso(row.archivedAt), created_by: userId,
     created_at: toIso(row.createdAt) ?? new Date().toISOString(),
   };
   // `name` existe après l'exécution manuelle du SQL (colonne ajoutée à public.parcelles).
@@ -110,6 +110,45 @@ export async function flushOutbox(onProgress?: (done: number, total: number) => 
       });
     }
     onProgress?.(i + 1, items.length);
+  }
+  return { ok, failed };
+}
+
+// ---- File d'attente des fichiers importés hors ligne (contenu conservé en local) ----
+export async function enqueueImportFile(blob: Blob, name: string, parcelleId: string | null): Promise<string> {
+  const id = crypto.randomUUID();
+  await db().importQueue.put({ id, name, parcelleId, blob, ts: Date.now() });
+  return id;
+}
+
+export async function importQueueCount(): Promise<number> {
+  if (!isBrowser()) return 0;
+  return db().importQueue.count();
+}
+
+export async function flushImportQueue(): Promise<{ ok: number; failed: number }> {
+  if (!isBrowser() || !navigator.onLine) return { ok: 0, failed: 0 };
+  const items = await db().importQueue.toArray();
+  let ok = 0, failed = 0;
+  for (const it of items) {
+    try {
+      const userId = await currentUserId();
+      const storagePath = `${userId ?? "anonymous"}/${Date.now()}-${it.name.replace(/[^\w.-]+/g, "_")}`;
+      const up = await supabase.storage.from("imports").upload(storagePath, it.blob, { upsert: true });
+      if (up.error) throw up.error;
+      const ins = await supabase.from("imports").insert({
+        parcelle_id: it.parcelleId || null,
+        file_name: it.name,
+        file_type: it.name.split(".").pop() ?? "",
+        storage_path: storagePath,
+        size_bytes: it.blob.size,
+        status: "archived",
+        created_by: userId,
+      });
+      if (ins.error) throw ins.error;
+      await db().importQueue.delete(it.id);
+      ok++;
+    } catch { failed++; }
   }
   return { ok, failed };
 }
@@ -198,7 +237,7 @@ export async function pullFromCloud(): Promise<PullResult> {
     const rows: SP[] = spsRes.data.map((r) => ({
       id: r.id, code: r.code, name: r.name,
       district: r.district ?? "", region: r.region ?? "", departement: r.departement ?? "",
-      notes: r.notes ?? undefined, createdAt: ts(r.created_at),
+      notes: r.notes ?? undefined, archivedAt: r.archived_at ? ts(r.archived_at) : null, createdAt: ts(r.created_at),
     }));
     await local.sps.bulkPut(rows);
     perTable.sps = rows.length; total += rows.length;
@@ -208,7 +247,8 @@ export async function pullFromCloud(): Promise<PullResult> {
   if (domRes.data) {
     const rows: Domaine[] = domRes.data.map((r) => ({
       id: r.id, code: r.code, name: r.name, spId: r.sp_id,
-      description: r.description ?? undefined, notes: r.notes ?? undefined, createdAt: ts(r.created_at),
+      description: r.description ?? undefined, notes: r.notes ?? undefined,
+      archivedAt: r.archived_at ? ts(r.archived_at) : null, createdAt: ts(r.created_at),
     }));
     await local.domaines.bulkPut(rows);
     perTable.domaines = rows.length; total += rows.length;
@@ -224,7 +264,7 @@ export async function pullFromCloud(): Promise<PullResult> {
       conventionStatus: (r.convention_status ?? "EN_COURS") as Parcelle["conventionStatus"],
       ownerPhoto: r.owner_photo ?? undefined, groupPhoto: r.group_photo ?? undefined,
       parcellePhoto: r.parcelle_photo ?? undefined,
-      notes: r.notes ?? undefined, createdAt: ts(r.created_at),
+      notes: r.notes ?? undefined, archivedAt: r.archived_at ? ts(r.archived_at) : null, createdAt: ts(r.created_at),
     }));
     await local.parcelles.bulkPut(rows);
     perTable.parcelles = rows.length; total += rows.length;
@@ -286,12 +326,13 @@ export function syncRemoved(table: TableName, id: string): void {
 }
 
 /** Vide toutes les files d'attente puis rafraîchit le cache local depuis le cloud. */
-export async function syncAll(): Promise<{ flushed: number; failed: number; pulled: number }> {
-  if (!isBrowser() || !navigator.onLine) return { flushed: 0, failed: 0, pulled: 0 };
+export async function syncAll(): Promise<{ flushed: number; failed: number; pulled: number; imports: number }> {
+  if (!isBrowser() || !navigator.onLine) return { flushed: 0, failed: 0, pulled: 0, imports: 0 };
   const { ok, failed } = await flushOutbox();
+  const imp = await flushImportQueue();
   let pulled = 0;
   try { pulled = (await pullFromCloud()).total; } catch { /* cache conservé */ }
-  return { flushed: ok, failed, pulled };
+  return { flushed: ok, failed, pulled, imports: imp.ok };
 }
 
 /** Migration unique par appareil : pousse l'historique local encore absent du cloud. */

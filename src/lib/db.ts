@@ -11,6 +11,15 @@ export interface OutboxEntry {
   lastError?: string;
 }
 
+/** Fichier importé hors ligne : contenu conservé localement en attendant le réseau. */
+export interface QueuedImport {
+  id: string;
+  name: string;
+  parcelleId?: string | null;
+  blob: Blob;
+  ts: number;
+}
+
 class AcreDB extends Dexie {
   users!: Table<User, string>;
   sps!: Table<SP, string>;
@@ -20,6 +29,7 @@ class AcreDB extends Dexie {
   lots!: Table<Lot, string>;
   meta!: Table<{ key: string; value: unknown }, string>;
   outbox!: Table<OutboxEntry, string>;
+  importQueue!: Table<QueuedImport, string>;
 
   constructor() {
     super("acremap");
@@ -60,6 +70,18 @@ class AcreDB extends Dexie {
       lots: "id, parcelleId, measurementId, code",
       meta: "key",
       outbox: "[table+id], table, ts",
+    });
+    // v5 — file d'attente des fichiers importés hors ligne (contenu inclus)
+    this.version(5).stores({
+      users: "id, username, role",
+      sps: "id, code, district, region, departement",
+      domaines: "id, code, spId",
+      parcelles: "id, code, domaineId, ownerName",
+      measurements: "id, status, parcelleId, createdBy, createdAt",
+      lots: "id, parcelleId, measurementId, code",
+      meta: "key",
+      outbox: "[table+id], table, ts",
+      importQueue: "id, ts",
     });
   }
 }

@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       domaines: {
         Row: {
+          archived_at: string | null
           code: string
           created_at: string
           created_by: string | null
@@ -27,6 +28,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           code: string
           created_at?: string
           created_by?: string | null
@@ -38,6 +40,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           code?: string
           created_at?: string
           created_by?: string | null
@@ -317,6 +320,7 @@ export type Database = {
       }
       parcelles: {
         Row: {
+          archived_at: string | null
           code: string
           convention_date: string | null
           convention_status: string
@@ -335,6 +339,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           code: string
           convention_date?: string | null
           convention_status?: string
@@ -353,6 +358,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           code?: string
           convention_date?: string | null
           convention_status?: string
@@ -415,6 +421,7 @@ export type Database = {
       }
       sps: {
         Row: {
+          archived_at: string | null
           code: string
           created_at: string
           created_by: string | null
@@ -427,6 +434,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           code: string
           created_at?: string
           created_by?: string | null
@@ -439,6 +447,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           code?: string
           created_at?: string
           created_by?: string | null

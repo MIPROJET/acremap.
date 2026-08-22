@@ -4,9 +4,15 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
+// has_role() now lives in the non-API-exposed `private` schema, so it can no
+// longer be called via rpc(). Verify the admin role through the user_roles
+// table directly: RLS lets a user read their own role row and profile.
 async function assertAdmin(supabase: any, userId: string) {
-  const { data } = await supabase.rpc("has_role", { _user_id: userId, _role: "admin" });
-  if (!data) throw new Error("Réservé à l'administrateur");
+  const [{ data: roleRow }, { data: profile }] = await Promise.all([
+    supabase.from("user_roles").select("id").eq("user_id", userId).eq("role", "admin").maybeSingle(),
+    supabase.from("profiles").select("disabled").eq("id", userId).maybeSingle(),
+  ]);
+  if (!roleRow || profile?.disabled) throw new Error("Réservé à l'administrateur");
 }
 
 function randomPassword(): string {

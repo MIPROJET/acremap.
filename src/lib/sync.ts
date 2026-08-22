@@ -17,7 +17,7 @@ function mapSp(row: SP, userId: string | null) {
   return {
     id: row.id, code: row.code, name: row.name,
     district: row.district ?? null, region: row.region ?? null, departement: row.departement ?? null,
-    notes: row.notes ?? null, created_by: userId,
+    notes: row.notes ?? null, archived_at: toIso(row.archivedAt), created_by: userId,
     created_at: toIso(row.createdAt) ?? new Date().toISOString(),
   };
 }

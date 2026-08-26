@@ -1,10 +1,12 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { db, isBrowser } from "@/lib/db";
 import { polygonAreaM2, polygonPerimeterM } from "@/lib/gps";
 import { formatArea } from "@/lib/format";
 import { extOf, isGeometryFile, parseSurveyFile } from "@/lib/import-parse";
+import { enqueueImportFile, flushImportQueue, importQueueCount, syncNow, syncRemoved } from "@/lib/sync";
+import { useAuth } from "@/lib/auth";
 import type { Measurement, Parcelle } from "@/lib/types";
 import { toast } from "sonner";
 
@@ -40,6 +42,12 @@ function TraitementPage() {
   const [parcelles, setParcelles] = useState<Parcelle[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  const [pending, setPending] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [targetParcelle, setTargetParcelle] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const user = useAuth((s) => s.user);
+  const isAdmin = user?.role === "admin";
 
   async function reload() {
     if (!isBrowser()) return;
@@ -54,13 +62,67 @@ function TraitementPage() {
         .limit(200);
       setImports((data ?? []) as ImportRow[]);
     }
+    setPending(await importQueueCount());
     setLoading(false);
+  }
+
+  // ---- Import de fichiers (dropzone) : upload direct, ou file d'attente hors ligne ----
+  async function uploadFiles(files: FileList | File[] | null) {
+    const list = Array.from(files ?? []);
+    if (!list.length) return;
+    setUploading(true);
+    try {
+      for (const file of list) {
+        if (!navigator.onLine) {
+          await enqueueImportFile(file, file.name, targetParcelle || null);
+          continue;
+        }
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth.user?.id ?? "anonymous";
+        const path = `${uid}/${Date.now()}-${file.name.replace(/[^\w.\-]+/g, "_")}`;
+        const up = await supabase.storage.from("imports").upload(path, file, { upsert: true });
+        if (up.error) { toast.error(`${file.name} : ${up.error.message}`); continue; }
+        const ins = await supabase.from("imports").insert({
+          parcelle_id: targetParcelle || null,
+          file_name: file.name,
+          file_type: extOf(file.name),
+          storage_path: path,
+          size_bytes: file.size,
+          status: isGeometryFile(file.name) ? "uploaded" : "archived",
+          created_by: auth.user?.id ?? null,
+        });
+        if (ins.error) toast.error(`${file.name} : ${ins.error.message}`);
+      }
+      toast.success(navigator.onLine ? "Fichier(s) importé(s)" : "Hors ligne — fichier(s) en file d'attente");
+      void reload();
+    } finally { setUploading(false); }
+  }
+
+  async function flushPending() {
+    const r = await flushImportQueue();
+    toast[r.failed ? "warning" : "success"](`${r.ok} fichier(s) envoyé(s)${r.failed ? `, ${r.failed} en échec` : ""}`);
+    void reload();
+  }
+
+  // ---- Suppression administrateur d'un fichier archivé ----
+  async function deleteImport(f: ImportRow) {
+    if (!isAdmin) return;
+    if (!confirm(`Supprimer définitivement « ${f.file_name} » ?`)) return;
+    setBusy(f.id);
+    try {
+      if (f.storage_path) await supabase.storage.from("imports").remove([f.storage_path]);
+      const { error } = await supabase.from("imports").delete().eq("id", f.id);
+      if (error) { toast.error(error.message); return; }
+      setImports((cur) => cur.filter((x) => x.id !== f.id));
+      toast.success("Fichier supprimé");
+    } finally { setBusy(null); }
   }
 
   useEffect(() => { void reload(); }, []);
 
   async function attach(m: Measurement, parcelleId: string) {
     await db().measurements.update(m.id, { parcelleId });
+    syncNow("measurements", m.id);
     toast.success("Relevé rattaché à la parcelle");
     void reload();
   }
@@ -72,12 +134,14 @@ function TraitementPage() {
       areaM2: polygonAreaM2(poly),
       perimeterM: polygonPerimeterM(poly),
     });
+    syncNow("measurements", m.id);
     toast.success("Surface et périmètre recalculés");
     void reload();
   }
 
   async function drop(m: Measurement) {
     await db().measurements.delete(m.id);
+    syncRemoved("measurements", m.id);
     toast.success("Relevé importé supprimé");
     void reload();
   }
@@ -133,6 +197,7 @@ function TraitementPage() {
         unit: "ha",
         notes: `Importé depuis ${f.file_name}`,
       });
+      syncNow("measurements", id);
       await supabase.from("imports").update({ status: "parsed" }).eq("id", f.id);
       toast.success(`${parsed.format} traité — ${ring.length} points, ${formatArea(polygonAreaM2(poly), "ha")}`);
       void reload();
@@ -157,10 +222,41 @@ function TraitementPage() {
             recalculez leurs surfaces puis morcelez-les depuis la fiche parcelle.
           </p>
         </div>
-        <Link to="/app/import" className="h-10 px-4 inline-flex items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-semibold shrink-0">
-          + Importer des fichiers
-        </Link>
       </header>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold">Importer des fichiers</h2>
+        <label className="block">
+          <span className="text-xs text-muted-foreground">Rattacher à une parcelle (optionnel)</span>
+          <select value={targetParcelle} onChange={(e) => setTargetParcelle(e.target.value)}
+            className="mt-1 w-full h-10 px-3 rounded-lg border bg-background text-sm">
+            <option value="">— Aucune —</option>
+            {parcelles.map((p) => (
+              <option key={p.id} value={p.id}>{p.code} · {p.name ?? p.ownerName}</option>
+            ))}
+          </select>
+        </label>
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => { e.preventDefault(); void uploadFiles(e.dataTransfer.files); }}
+          className="border-2 border-dashed rounded-xl p-6 text-center bg-card">
+          <p className="text-sm font-medium">Déposez vos fichiers ici</p>
+          <p className="text-xs text-muted-foreground mt-1">.dxf .dwg .gpx .kml .kmz .geojson .csv .txt .pdf .zip</p>
+          <button type="button" disabled={uploading} onClick={() => fileRef.current?.click()}
+            className="mt-3 h-10 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50">
+            {uploading ? "Import…" : "Choisir des fichiers"}
+          </button>
+          <input ref={fileRef} type="file" multiple hidden
+            accept=".dxf,.dwg,.gpx,.kml,.kmz,.geojson,.json,.csv,.txt,.pdf,.zip,.shp,.dbf,.prj"
+            onChange={(e) => void uploadFiles(e.target.files)} />
+        </div>
+        {pending > 0 && (
+          <div className="flex items-center justify-between gap-3 text-xs px-3 py-2 rounded-lg bg-warn/15 border border-warn/30">
+            <span>{pending} fichier(s) en attente d'envoi (hors ligne).</span>
+            <button onClick={() => void flushPending()} className="h-8 px-3 rounded-md border font-medium">Envoyer maintenant</button>
+          </div>
+        )}
+      </section>
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold">Relevés importés ({measurements.length})</h2>
@@ -248,6 +344,14 @@ function TraitementPage() {
                       className="h-9 px-3 rounded-lg border text-xs font-medium disabled:opacity-50">
                       Ouvrir la parcelle
                     </button>
+                    {isAdmin && (
+                      <button
+                        disabled={busy === f.id}
+                        onClick={() => void deleteImport(f)}
+                        className="h-9 px-3 rounded-lg border text-xs font-medium text-destructive disabled:opacity-50">
+                        Supprimer
+                      </button>
+                    )}
                   </div>
                 </div>
                 <label className="block">

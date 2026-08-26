@@ -139,12 +139,12 @@ function AppLayout() {
         <Outlet />
       </main>
 
-      <nav className={`${isMeasureRoute ? "hidden" : "lg:hidden flex"} fixed bottom-0 inset-x-0 bg-card border-t items-stretch justify-around z-30 safe-area-bottom`}>
-        {items.slice(0, 4).map((n) => {
+      <nav className={`${isMeasureRoute ? "hidden" : "lg:hidden flex"} fixed bottom-0 inset-x-0 bg-card border-t items-stretch z-30 safe-area-bottom overflow-x-auto no-scrollbar`}>
+        {items.map((n) => {
           const active = path === n.to || (n.to !== "/app" && path.startsWith(n.to));
           return (
             <Link key={n.to} to={n.to}
-              className={`flex-1 flex flex-col items-center justify-center py-2 text-[10px] gap-0.5 ${
+              className={`min-w-[4.25rem] flex-1 flex flex-col items-center justify-center py-2 text-[10px] gap-0.5 ${
                 active ? "text-primary font-semibold" : "text-muted-foreground"
               }`}>
               <Icon name={n.icon} />
@@ -153,7 +153,7 @@ function AppLayout() {
           );
         })}
         <Link to="/app/parcelles/new"
-          className="flex-1 flex flex-col items-center justify-center py-2 text-[10px] gap-0.5 bg-primary text-primary-foreground font-semibold">
+          className="min-w-[4.25rem] flex-1 flex flex-col items-center justify-center py-2 text-[10px] gap-0.5 bg-primary text-primary-foreground font-semibold">
           <Icon name="crosshair" />
           <span className="leading-none">Nouveau</span>
         </Link>

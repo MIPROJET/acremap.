@@ -14,7 +14,7 @@ export const Route = createFileRoute("/app")({
 const NAV: { to: string; label: string; short: string; icon: string; admin?: boolean }[] = [
   { to: "/app", label: "Tableau de bord", short: "Accueil", icon: "home" },
   { to: "/app/parcelles", label: "Parcelles & levés", short: "Parcelles", icon: "map" },
-  { to: "/app/import", label: "Importer des fichiers", short: "Import", icon: "upload" },
+  
   { to: "/app/traitement", label: "Traitement & morcellement", short: "Traiter", icon: "tree" },
   { to: "/app/hierarchie", label: "Hiérarchie", short: "Hiérarchie", icon: "tree" },
   { to: "/app/assistant", label: "Assistant IA", short: "IA", icon: "sparkle" },
@@ -139,12 +139,12 @@ function AppLayout() {
         <Outlet />
       </main>
 
-      <nav className={`${isMeasureRoute ? "hidden" : "lg:hidden flex"} fixed bottom-0 inset-x-0 bg-card border-t items-stretch justify-around z-30 safe-area-bottom`}>
-        {items.slice(0, 4).map((n) => {
+      <nav className={`${isMeasureRoute ? "hidden" : "lg:hidden flex"} fixed bottom-0 inset-x-0 bg-card border-t items-stretch z-30 safe-area-bottom overflow-x-auto no-scrollbar`}>
+        {items.map((n) => {
           const active = path === n.to || (n.to !== "/app" && path.startsWith(n.to));
           return (
             <Link key={n.to} to={n.to}
-              className={`flex-1 flex flex-col items-center justify-center py-2 text-[10px] gap-0.5 ${
+              className={`min-w-[4.25rem] flex-1 flex flex-col items-center justify-center py-2 text-[10px] gap-0.5 ${
                 active ? "text-primary font-semibold" : "text-muted-foreground"
               }`}>
               <Icon name={n.icon} />
@@ -153,7 +153,7 @@ function AppLayout() {
           );
         })}
         <Link to="/app/parcelles/new"
-          className="flex-1 flex flex-col items-center justify-center py-2 text-[10px] gap-0.5 bg-primary text-primary-foreground font-semibold">
+          className="min-w-[4.25rem] flex-1 flex flex-col items-center justify-center py-2 text-[10px] gap-0.5 bg-primary text-primary-foreground font-semibold">
           <Icon name="crosshair" />
           <span className="leading-none">Nouveau</span>
         </Link>

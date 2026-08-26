@@ -223,7 +223,7 @@ export const CI_ADMIN: AdminUnit[] = [
   { district: "Zanzan", region: "Bounkani", departement: "Bouna",
     sps: ["Bouka", "Bouna", "Ondefidouo", "Youndouo"] },
   { district: "Zanzan", region: "Bounkani", departement: "Doropo",
-    sps: ["Danoa (69 020", "Doropo", "Kalamon 5 965)", "Niamoue"] },
+    sps: ["Danoa", "Doropo", "Kalamon", "Niamoue"] },
   { district: "Zanzan", region: "Bounkani", departement: "Nassian",
     sps: ["Bogofa", "Kakpin", "Kotouba", "Nassian", "Sominassé"] },
   { district: "Zanzan", region: "Bounkani", departement: "Téhini",

@@ -232,13 +232,20 @@ export async function pullFromCloud(): Promise<PullResult> {
   const perTable: Record<string, number> = {};
   let total = 0;
 
-  const spsRes = await supabase.from("sps").select("*").limit(1000);
+  const spsRes = await supabase.from("sps").select("*").limit(2000);
   if (spsRes.data) {
     const rows: SP[] = spsRes.data.map((r) => ({
       id: r.id, code: r.code, name: r.name,
       district: r.district ?? "", region: r.region ?? "", departement: r.departement ?? "",
       notes: r.notes ?? undefined, archivedAt: r.archived_at ? ts(r.archived_at) : null, createdAt: ts(r.created_at),
     }));
+    // Purge des SP locales absentes du cloud (ancien cache de 519 lignes).
+    const cloudIds = new Set(rows.map((r) => r.id));
+    const pendingIds = new Set((await local.outbox.toArray()).filter((o) => o.table === "sps").map((o) => o.id));
+    const stale = (await local.sps.toArray())
+      .filter((s) => !cloudIds.has(s.id) && !pendingIds.has(s.id))
+      .map((s) => s.id);
+    if (stale.length) await local.sps.bulkDelete(stale);
     await local.sps.bulkPut(rows);
     perTable.sps = rows.length; total += rows.length;
   }

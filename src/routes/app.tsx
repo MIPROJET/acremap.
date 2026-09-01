@@ -4,7 +4,7 @@ import { Logo } from "@/components/Logo";
 import { useAuth } from "@/lib/auth";
 import { useNavigate, Outlet } from "@tanstack/react-router";
 import { notificationPermission, requestNotificationPermission } from "@/lib/feedback";
-import { initSync } from "@/lib/sync";
+import { initSync, syncAll } from "@/lib/sync";
 import { startOfflineWarmup } from "@/lib/offline";
 
 export const Route = createFileRoute("/app")({
@@ -67,7 +67,13 @@ function AppLayout() {
     }).catch(() => {});
   }, []);
 
-  useEffect(() => { setNotifPerm(notificationPermission()); initSync(); startOfflineWarmup(); }, []);
+  useEffect(() => {
+    setNotifPerm(notificationPermission());
+    initSync();
+    startOfflineWarmup();
+    // Invalidation du cache Dexie au démarrage : la liste des SP reste alignée sur le cloud.
+    void syncAll().catch(() => {});
+  }, []);
 
   if (!hydrated || !user) return null;
   const items = NAV.filter((n) => !n.admin || user.role === "admin");

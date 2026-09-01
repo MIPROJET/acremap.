@@ -41,6 +41,49 @@ function MeasurePage() {
     return db().parcelles.get(parcelleId);
   }, [parcelleId]);
 
+  // Sélection d'une parcelle existante (liste + recherche)
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQuery, setPickerQuery] = useState("");
+  const pickerData = useLiveQuery(async () => {
+    if (!isBrowser()) return null;
+    const d = db();
+    const [parcelles, domaines, sps] = await Promise.all([
+      d.parcelles.toArray(), d.domaines.toArray(), d.sps.toArray(),
+    ]);
+    const domById = new Map(domaines.map((x) => [x.id, x]));
+    const spById = new Map(sps.map((x) => [x.id, x]));
+    return parcelles
+      .filter((p) => !p.archivedAt)
+      .map((p) => {
+        const dom = domById.get(p.domaineId);
+        const sp = dom ? spById.get(dom.spId) : undefined;
+        return {
+          parcelle: p,
+          hierarchie: [sp?.district, sp?.region, sp?.departement, sp ? `${sp.code} · ${sp.name}` : null, dom ? `${dom.code} · ${dom.name}` : null]
+            .filter(Boolean).join(" › "),
+        };
+      })
+      .sort((a, b) => a.parcelle.code.localeCompare(b.parcelle.code));
+  }, []);
+
+  const pickerResults = useMemo(() => {
+    const list = pickerData ?? [];
+    const n = pickerQuery.trim().toLowerCase();
+    if (!n) return list.slice(0, 100);
+    return list.filter((r) =>
+      r.parcelle.code.toLowerCase().includes(n) ||
+      (r.parcelle.name ?? "").toLowerCase().includes(n) ||
+      r.parcelle.ownerName.toLowerCase().includes(n) ||
+      r.hierarchie.toLowerCase().includes(n),
+    ).slice(0, 100);
+  }, [pickerData, pickerQuery]);
+
+  function selectParcelle(id: string) {
+    setPickerOpen(false);
+    setPickerQuery("");
+    navigate({ to: "/app/measure", search: { parcelleId: id } as never });
+  }
+
   // `running` = GPS actif (interface ouverte, position affichée)
   // `started` = levée réellement démarrée (le tracé n'avance qu'à partir de là)
   const [running, setRunning] = useState(false);
@@ -412,18 +455,72 @@ function MeasurePage() {
           ±{filteredCur ? filteredCur.accuracy.toFixed(1) : "—"}m
         </div>
         {linkedParcelle ? (
-          <div className="pointer-events-auto flex-1 min-w-0 px-2.5 py-1.5 rounded-full bg-card/95 backdrop-blur shadow-elevated text-[11px] truncate">
+          <button onClick={() => setPickerOpen(true)}
+            className="pointer-events-auto flex-1 min-w-0 px-2.5 py-1.5 rounded-full bg-card/95 backdrop-blur shadow-elevated text-[11px] truncate text-left">
             <b className="text-primary">{linkedParcelle.code}</b> · {linkedParcelle.ownerName}
-          </div>
+          </button>
         ) : (
-          <Link to="/app/parcelles/new" className="pointer-events-auto flex-1 px-2.5 py-1.5 rounded-full bg-warn/95 text-white text-[11px] font-semibold shadow-elevated truncate">
-            <AlertTriangle className="inline w-3 h-3 mr-1" />Créer la parcelle
-          </Link>
+          <button onClick={() => setPickerOpen(true)}
+            className="pointer-events-auto flex-1 px-2.5 py-1.5 rounded-full bg-warn/95 text-white text-[11px] font-semibold shadow-elevated truncate">
+            <AlertTriangle className="inline w-3 h-3 mr-1" />Sélectionner une parcelle
+          </button>
         )}
         <Link to="/app" className="pointer-events-auto p-2 rounded-full bg-card/95 backdrop-blur shadow-elevated">
           <X className="w-4 h-4" />
         </Link>
       </div>
+
+      {/* SÉLECTION DE PARCELLE — liste + recherche */}
+      {pickerOpen && (
+        <div className="absolute inset-0 z-[900] bg-black/50 flex items-end sm:items-center justify-center p-2 sm:p-6">
+          <div className="w-full max-w-lg bg-card rounded-2xl shadow-elevated overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-3 border-b flex items-center gap-2">
+              <div className="flex-1">
+                <h2 className="font-semibold text-sm">Sélectionner une parcelle</h2>
+                <p className="text-[11px] text-muted-foreground">Retour automatique au levé après la sélection.</p>
+              </div>
+              <button onClick={() => setPickerOpen(false)} className="p-2 rounded-full hover:bg-muted">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-3 border-b">
+              <input autoFocus value={pickerQuery} onChange={(e) => setPickerQuery(e.target.value)}
+                placeholder="Rechercher (code, propriétaire, domaine, sous-préfecture…)"
+                className="w-full h-10 px-3 rounded-md border bg-background text-sm" />
+            </div>
+            <ul className="flex-1 overflow-y-auto divide-y">
+              {pickerResults.length === 0 && (
+                <li className="px-3 py-6 text-xs text-muted-foreground text-center">Aucune parcelle trouvée.</li>
+              )}
+              {pickerResults.map(({ parcelle: p, hierarchie }) => (
+                <li key={p.id}>
+                  <button onClick={() => selectParcelle(p.id)}
+                    className={`w-full text-left px-3 py-2.5 hover:bg-muted/60 flex gap-3 ${p.id === parcelleId ? "bg-primary/10" : ""}`}>
+                    <div className="flex gap-1 shrink-0">
+                      {[p.parcellePhoto, p.ownerPhoto, p.groupPhoto].filter(Boolean).slice(0, 2).map((src, i) => (
+                        <img key={i} src={src as string} alt="Photo parcelle"
+                          className="w-10 h-10 rounded-md object-cover border" />
+                      ))}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold truncate">
+                        {p.code}{p.name ? ` · ${p.name}` : ""}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground truncate">{p.ownerName}</div>
+                      <div className="text-[10px] text-muted-foreground truncate">{hierarchie || "Hiérarchie incomplète"}</div>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="p-3 border-t">
+              <Link to="/app/parcelles/new" className="block text-center text-xs px-3 py-2 rounded-md border hover:bg-muted">
+                + Créer une nouvelle parcelle
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* BANDEAU PAUSE */}
       {paused && running && (

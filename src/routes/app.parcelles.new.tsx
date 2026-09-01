@@ -3,12 +3,11 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo, useState } from "react";
 import { db, isBrowser } from "@/lib/db";
 import { nextSequentialCode } from "@/lib/ref";
-import {
-  listDistricts, regionsOfDistrict, departementsOfRegion, spsOfDepartement,
-} from "@/lib/ci-admin";
+import { SearchSelect } from "@/components/SearchSelect";
+import { buildSpChoices, ensureSpByName } from "@/lib/sp-registry";
 import { fileToDataUrl } from "@/lib/photo";
 import { feedbackSuccess } from "@/lib/feedback";
-import { syncEntity } from "@/lib/sync";
+import { syncEntity, pullFromCloud } from "@/lib/sync";
 
 export const Route = createFileRoute("/app/parcelles/new")({
   component: NewParcelleWizard,
@@ -33,11 +32,12 @@ function NewParcelleWizard() {
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>(1);
 
-  // Étape 1 — géographie
-  const [district, setDistrict] = useState("");
-  const [region, setRegion] = useState("");
-  const [departement, setDepartement] = useState("");
+  // Étape 1 — sous-préfecture (le reste de la hiérarchie est auto-rempli)
   const [spName, setSpName] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
+  const [spBusy, setSpBusy] = useState(false);
+  const [spMsg, setSpMsg] = useState<string | null>(null);
 
   // Étape 2 — domaine
   const [domaineExistingId, setDomaineExistingId] = useState<string>("");
@@ -68,52 +68,38 @@ function NewParcelleWizard() {
     return { sps, domaines, parcelles };
   }, []);
 
-  // Listes déroulantes = référentiel officiel + tout ce qui a déjà été créé
-  const districtOptions = useMemo(
-    () => uniq([...listDistricts(), ...(existing?.sps.map((s) => s.district) ?? [])]),
-    [existing],
-  );
-  const regionOptions = useMemo(
-    () => uniq([
-      ...regionsOfDistrict(district),
-      ...(existing?.sps.filter((s) => !district || s.district === district).map((s) => s.region) ?? []),
-    ]),
-    [existing, district],
-  );
-  const departementOptions = useMemo(
-    () => uniq([
-      ...departementsOfRegion(region),
-      ...(existing?.sps.filter((s) => !region || s.region === region).map((s) => s.departement) ?? []),
-    ]),
-    [existing, region],
-  );
+  // Référentiel national + sous-préfectures déjà déployées
+  const spChoices = useMemo(() => buildSpChoices(existing?.sps ?? []), [existing]);
   const spOptions = useMemo(
-    () => uniq([
-      ...spsOfDepartement(departement),
-      ...(existing?.sps.filter((s) => !departement || s.departement === departement).map((s) => s.name) ?? []),
-    ]),
-    [existing, departement],
+    () => spChoices.map((c) => ({
+      value: c.name,
+      label: c.code ? `${c.code} · ${c.name}` : c.name,
+      hint: [c.departement, c.region, c.district].filter(Boolean).join(" · "),
+    })),
+    [spChoices],
+  );
+  const selectedSp = useMemo(
+    () => spChoices.find((c) => c.name === spName) ?? null,
+    [spChoices, spName],
   );
   const ownerOptions = useMemo(() => uniq(existing?.parcelles.map((p) => p.ownerName) ?? []), [existing]);
 
-  // SP existante candidate (nom identique dans le même département)
+  // SP déjà enregistrée (référence officielle existante)
   const matchingSp = useMemo(() => {
-    if (!existing) return null;
-    const n = spName.trim().toLowerCase();
-    if (!n) return null;
-    return existing.sps.find(
-      (s) => s.name.toLowerCase() === n && (!departement || s.departement === departement),
-    ) ?? null;
-  }, [existing, spName, departement]);
+    if (!existing || !selectedSp?.id) return null;
+    return existing.sps.find((s) => s.id === selectedSp.id) ?? null;
+  }, [existing, selectedSp]);
 
-  // Quand on choisit une SP déjà enregistrée, on remplit la hiérarchie automatiquement
-  function pickSp(v: string) {
-    setSpName(v);
-    const found = existing?.sps.find((s) => s.name.toLowerCase() === v.trim().toLowerCase());
-    if (found) {
-      if (found.district) setDistrict(found.district);
-      if (found.region) setRegion(found.region);
-      if (found.departement) setDepartement(found.departement);
+  async function refreshSps() {
+    setRefreshing(true);
+    setRefreshMsg(null);
+    try {
+      await pullFromCloud();
+      setRefreshMsg("Liste des sous-préfectures à jour.");
+    } catch {
+      setRefreshMsg("Rafraîchissement impossible (hors ligne ?).");
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -134,18 +120,15 @@ function NewParcelleWizard() {
     try {
       const d = db();
 
-      // SP — réutilise ou crée (et devient disponible dans les listes)
-      let spId = matchingSp?.id;
-      if (!spId) {
-        const code = nextSequentialCode("SP", existing.sps.map((x) => x.code));
-        spId = crypto.randomUUID();
-        await d.sps.put({
-          id: spId, code, name: spName.trim(),
-          district: district.trim(), region: region.trim(), departement: departement.trim(),
-          createdAt: Date.now(),
-        });
-        void syncEntity("sps", spId).catch(() => {});
-      }
+      // SP — réutilise la référence existante ou la crée automatiquement (SP00X)
+      setSpBusy(true);
+      setSpMsg("Attribution de la référence sous-préfecture…");
+      const { sp, created } = await ensureSpByName(spName);
+      const spId = sp.id;
+      setSpBusy(false);
+      setSpMsg(created
+        ? `Référence créée automatiquement : ${sp.code} · ${sp.name}`
+        : `Sous-préfecture existante : ${sp.code} · ${sp.name}`);
 
       // Domaine — réutilise ou crée
       let domId: string;
@@ -191,6 +174,7 @@ function NewParcelleWizard() {
       feedbackSuccess();
       navigate({ to: "/app/measure", search: { parcelleId: parcId } as never });
     } catch (e) {
+      setSpBusy(false);
       setError(e instanceof Error ? e.message : "Erreur lors de l'enregistrement.");
     } finally {
       setSaving(false);
@@ -218,35 +202,49 @@ function NewParcelleWizard() {
       {error && <div className="text-xs bg-destructive/10 text-destructive px-3 py-2 rounded-md">{error}</div>}
 
       {step === 1 && (
-        <Section title="1 · Localisation administrative" hint="District → Région → Département → Sous-Préfecture.">
-          <ComboField label="District" value={district} options={districtOptions}
-            placeholder="Sélectionner ou saisir un district"
-            onChange={(v) => {
-              setDistrict(v);
-              const r = regionsOfDistrict(v);
-              if (r.length && !r.includes(region)) { setRegion(r[0]); const dp = departementsOfRegion(r[0]); setDepartement(dp[0] ?? ""); }
-            }} />
-          <ComboField label="Région" value={region} options={regionOptions}
-            placeholder="Sélectionner ou saisir une région"
-            onChange={(v) => {
-              setRegion(v);
-              const dp = departementsOfRegion(v);
-              if (dp.length && !dp.includes(departement)) setDepartement(dp[0]);
-            }} />
-          <ComboField label="Département" value={departement} options={departementOptions}
-            placeholder="Sélectionner ou saisir un département"
-            onChange={setDepartement} />
-          <ComboField label="Sous-Préfecture" value={spName} options={spOptions}
-            onChange={pickSp} placeholder="Sélectionner ou saisir (ex : Daloa-Centre)" />
-          {matchingSp ? (
-            <div className="text-xs bg-success/10 text-success rounded-md px-3 py-2">
-              Sous-préfecture existante réutilisée : <b>{matchingSp.code} · {matchingSp.name}</b>
+        <Section title="1 · Sous-préfecture" hint="Sélectionnez la sous-préfecture : district, région et département sont remplis automatiquement.">
+          <Field label="Sous-Préfecture">
+            <SearchSelect
+              value={spName}
+              options={spOptions}
+              onChange={setSpName}
+              placeholder="Sélectionner une sous-préfecture"
+            />
+          </Field>
+
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={refreshSps} disabled={refreshing}
+              className="text-xs px-3 py-2 rounded-md border bg-background hover:bg-muted disabled:opacity-50">
+              {refreshing ? "Rafraîchissement…" : "↻ Rafraîchir depuis le cloud"}
+            </button>
+            {refreshMsg && <span className="text-[11px] text-muted-foreground">{refreshMsg}</span>}
+          </div>
+
+          {selectedSp && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+              <ReadOnly label="District" value={selectedSp.district} />
+              <ReadOnly label="Région" value={selectedSp.region} />
+              <ReadOnly label="Département" value={selectedSp.departement} />
             </div>
-          ) : spName.trim() ? (
+          )}
+
+          {selectedSp?.code ? (
+            <div className="text-xs bg-success/10 text-success rounded-md px-3 py-2">
+              Référence officielle existante : <b>{selectedSp.code} · {selectedSp.name}</b>
+            </div>
+          ) : selectedSp ? (
             <div className="text-xs bg-warn/10 text-warn rounded-md px-3 py-2">
-              Nouvelle sous-préfecture — elle sera créée et disponible dans la liste ensuite.
+              Premier déploiement sur cette sous-préfecture — la référence SP00X sera créée
+              automatiquement à l'enregistrement.
             </div>
           ) : null}
+
+          {(spBusy || spMsg) && (
+            <div className="text-xs flex items-center gap-2 rounded-md px-3 py-2 bg-muted">
+              {spBusy && <span className="w-3.5 h-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin" />}
+              <span>{spMsg}</span>
+            </div>
+          )}
         </Section>
       )}
 
@@ -314,6 +312,13 @@ function NewParcelleWizard() {
         </Section>
       )}
 
+      {step === 4 && (spBusy || spMsg) && (
+        <div className="text-xs flex items-center gap-2 rounded-md px-3 py-2 bg-muted">
+          {spBusy && <span className="w-3.5 h-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin" />}
+          <span>{spMsg}</span>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-2 pt-2 pb-6">
         {step > 1 && (
           <button onClick={() => setStep((s) => (s - 1) as Step)}
@@ -368,6 +373,15 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
       </div>
       {children}
     </section>
+  );
+}
+
+function ReadOnly({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border bg-muted/40 px-3 py-2">
+      <div className="text-[10px] text-muted-foreground">{label}</div>
+      <div className="font-medium truncate">{value || "—"}</div>
+    </div>
   );
 }
 

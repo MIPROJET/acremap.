@@ -312,6 +312,13 @@ function NewParcelleWizard() {
         </Section>
       )}
 
+      {step === 4 && (spBusy || spMsg) && (
+        <div className="text-xs flex items-center gap-2 rounded-md px-3 py-2 bg-muted">
+          {spBusy && <span className="w-3.5 h-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin" />}
+          <span>{spMsg}</span>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-2 pt-2 pb-6">
         {step > 1 && (
           <button onClick={() => setStep((s) => (s - 1) as Step)}

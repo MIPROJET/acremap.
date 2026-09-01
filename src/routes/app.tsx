@@ -67,7 +67,13 @@ function AppLayout() {
     }).catch(() => {});
   }, []);
 
-  useEffect(() => { setNotifPerm(notificationPermission()); initSync(); startOfflineWarmup(); }, []);
+  useEffect(() => {
+    setNotifPerm(notificationPermission());
+    initSync();
+    startOfflineWarmup();
+    // Invalidation du cache Dexie au démarrage : la liste des SP reste alignée sur le cloud.
+    void syncAll().catch(() => {});
+  }, []);
 
   if (!hydrated || !user) return null;
   const items = NAV.filter((n) => !n.admin || user.role === "admin");

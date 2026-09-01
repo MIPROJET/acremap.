@@ -41,6 +41,49 @@ function MeasurePage() {
     return db().parcelles.get(parcelleId);
   }, [parcelleId]);
 
+  // Sélection d'une parcelle existante (liste + recherche)
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQuery, setPickerQuery] = useState("");
+  const pickerData = useLiveQuery(async () => {
+    if (!isBrowser()) return null;
+    const d = db();
+    const [parcelles, domaines, sps] = await Promise.all([
+      d.parcelles.toArray(), d.domaines.toArray(), d.sps.toArray(),
+    ]);
+    const domById = new Map(domaines.map((x) => [x.id, x]));
+    const spById = new Map(sps.map((x) => [x.id, x]));
+    return parcelles
+      .filter((p) => !p.archivedAt)
+      .map((p) => {
+        const dom = domById.get(p.domaineId);
+        const sp = dom ? spById.get(dom.spId) : undefined;
+        return {
+          parcelle: p,
+          hierarchie: [sp?.district, sp?.region, sp?.departement, sp ? `${sp.code} · ${sp.name}` : null, dom ? `${dom.code} · ${dom.name}` : null]
+            .filter(Boolean).join(" › "),
+        };
+      })
+      .sort((a, b) => a.parcelle.code.localeCompare(b.parcelle.code));
+  }, []);
+
+  const pickerResults = useMemo(() => {
+    const list = pickerData ?? [];
+    const n = pickerQuery.trim().toLowerCase();
+    if (!n) return list.slice(0, 100);
+    return list.filter((r) =>
+      r.parcelle.code.toLowerCase().includes(n) ||
+      (r.parcelle.name ?? "").toLowerCase().includes(n) ||
+      r.parcelle.ownerName.toLowerCase().includes(n) ||
+      r.hierarchie.toLowerCase().includes(n),
+    ).slice(0, 100);
+  }, [pickerData, pickerQuery]);
+
+  function selectParcelle(id: string) {
+    setPickerOpen(false);
+    setPickerQuery("");
+    navigate({ to: "/app/measure", search: { parcelleId: id } as never });
+  }
+
   // `running` = GPS actif (interface ouverte, position affichée)
   // `started` = levée réellement démarrée (le tracé n'avance qu'à partir de là)
   const [running, setRunning] = useState(false);

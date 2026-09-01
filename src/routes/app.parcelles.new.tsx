@@ -32,11 +32,12 @@ function NewParcelleWizard() {
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>(1);
 
-  // Étape 1 — géographie
-  const [district, setDistrict] = useState("");
-  const [region, setRegion] = useState("");
-  const [departement, setDepartement] = useState("");
+  // Étape 1 — sous-préfecture (le reste de la hiérarchie est auto-rempli)
   const [spName, setSpName] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMsg, setRefreshMsg] = useState<string | null>(null);
+  const [spBusy, setSpBusy] = useState(false);
+  const [spMsg, setSpMsg] = useState<string | null>(null);
 
   // Étape 2 — domaine
   const [domaineExistingId, setDomaineExistingId] = useState<string>("");

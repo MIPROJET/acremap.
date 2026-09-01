@@ -3,12 +3,11 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo, useState } from "react";
 import { db, isBrowser } from "@/lib/db";
 import { nextSequentialCode } from "@/lib/ref";
-import {
-  listDistricts, regionsOfDistrict, departementsOfRegion, spsOfDepartement,
-} from "@/lib/ci-admin";
+import { SearchSelect } from "@/components/SearchSelect";
+import { buildSpChoices, ensureSpByName } from "@/lib/sp-registry";
 import { fileToDataUrl } from "@/lib/photo";
 import { feedbackSuccess } from "@/lib/feedback";
-import { syncEntity } from "@/lib/sync";
+import { syncEntity, pullFromCloud } from "@/lib/sync";
 
 export const Route = createFileRoute("/app/parcelles/new")({
   component: NewParcelleWizard,

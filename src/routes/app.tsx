@@ -4,7 +4,7 @@ import { Logo } from "@/components/Logo";
 import { useAuth } from "@/lib/auth";
 import { useNavigate, Outlet } from "@tanstack/react-router";
 import { notificationPermission, requestNotificationPermission } from "@/lib/feedback";
-import { initSync } from "@/lib/sync";
+import { initSync, syncAll } from "@/lib/sync";
 import { startOfflineWarmup } from "@/lib/offline";
 
 export const Route = createFileRoute("/app")({

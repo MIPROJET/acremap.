@@ -174,6 +174,7 @@ function NewParcelleWizard() {
       feedbackSuccess();
       navigate({ to: "/app/measure", search: { parcelleId: parcId } as never });
     } catch (e) {
+      setSpBusy(false);
       setError(e instanceof Error ? e.message : "Erreur lors de l'enregistrement.");
     } finally {
       setSaving(false);

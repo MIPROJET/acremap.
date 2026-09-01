@@ -455,13 +455,15 @@ function MeasurePage() {
           ±{filteredCur ? filteredCur.accuracy.toFixed(1) : "—"}m
         </div>
         {linkedParcelle ? (
-          <div className="pointer-events-auto flex-1 min-w-0 px-2.5 py-1.5 rounded-full bg-card/95 backdrop-blur shadow-elevated text-[11px] truncate">
+          <button onClick={() => setPickerOpen(true)}
+            className="pointer-events-auto flex-1 min-w-0 px-2.5 py-1.5 rounded-full bg-card/95 backdrop-blur shadow-elevated text-[11px] truncate text-left">
             <b className="text-primary">{linkedParcelle.code}</b> · {linkedParcelle.ownerName}
-          </div>
+          </button>
         ) : (
-          <Link to="/app/parcelles/new" className="pointer-events-auto flex-1 px-2.5 py-1.5 rounded-full bg-warn/95 text-white text-[11px] font-semibold shadow-elevated truncate">
-            <AlertTriangle className="inline w-3 h-3 mr-1" />Créer la parcelle
-          </Link>
+          <button onClick={() => setPickerOpen(true)}
+            className="pointer-events-auto flex-1 px-2.5 py-1.5 rounded-full bg-warn/95 text-white text-[11px] font-semibold shadow-elevated truncate">
+            <AlertTriangle className="inline w-3 h-3 mr-1" />Sélectionner une parcelle
+          </button>
         )}
         <Link to="/app" className="pointer-events-auto p-2 rounded-full bg-card/95 backdrop-blur shadow-elevated">
           <X className="w-4 h-4" />

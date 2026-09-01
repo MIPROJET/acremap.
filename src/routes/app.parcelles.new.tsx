@@ -120,18 +120,15 @@ function NewParcelleWizard() {
     try {
       const d = db();
 
-      // SP — réutilise ou crée (et devient disponible dans les listes)
-      let spId = matchingSp?.id;
-      if (!spId) {
-        const code = nextSequentialCode("SP", existing.sps.map((x) => x.code));
-        spId = crypto.randomUUID();
-        await d.sps.put({
-          id: spId, code, name: spName.trim(),
-          district: district.trim(), region: region.trim(), departement: departement.trim(),
-          createdAt: Date.now(),
-        });
-        void syncEntity("sps", spId).catch(() => {});
-      }
+      // SP — réutilise la référence existante ou la crée automatiquement (SP00X)
+      setSpBusy(true);
+      setSpMsg("Attribution de la référence sous-préfecture…");
+      const { sp, created } = await ensureSpByName(spName);
+      const spId = sp.id;
+      setSpBusy(false);
+      setSpMsg(created
+        ? `Référence créée automatiquement : ${sp.code} · ${sp.name}`
+        : `Sous-préfecture existante : ${sp.code} · ${sp.name}`);
 
       // Domaine — réutilise ou crée
       let domId: string;

@@ -470,6 +470,58 @@ function MeasurePage() {
         </Link>
       </div>
 
+      {/* SÉLECTION DE PARCELLE — liste + recherche */}
+      {pickerOpen && (
+        <div className="absolute inset-0 z-[900] bg-black/50 flex items-end sm:items-center justify-center p-2 sm:p-6">
+          <div className="w-full max-w-lg bg-card rounded-2xl shadow-elevated overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-3 border-b flex items-center gap-2">
+              <div className="flex-1">
+                <h2 className="font-semibold text-sm">Sélectionner une parcelle</h2>
+                <p className="text-[11px] text-muted-foreground">Retour automatique au levé après la sélection.</p>
+              </div>
+              <button onClick={() => setPickerOpen(false)} className="p-2 rounded-full hover:bg-muted">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-3 border-b">
+              <input autoFocus value={pickerQuery} onChange={(e) => setPickerQuery(e.target.value)}
+                placeholder="Rechercher (code, propriétaire, domaine, sous-préfecture…)"
+                className="w-full h-10 px-3 rounded-md border bg-background text-sm" />
+            </div>
+            <ul className="flex-1 overflow-y-auto divide-y">
+              {pickerResults.length === 0 && (
+                <li className="px-3 py-6 text-xs text-muted-foreground text-center">Aucune parcelle trouvée.</li>
+              )}
+              {pickerResults.map(({ parcelle: p, hierarchie }) => (
+                <li key={p.id}>
+                  <button onClick={() => selectParcelle(p.id)}
+                    className={`w-full text-left px-3 py-2.5 hover:bg-muted/60 flex gap-3 ${p.id === parcelleId ? "bg-primary/10" : ""}`}>
+                    <div className="flex gap-1 shrink-0">
+                      {[p.parcellePhoto, p.ownerPhoto, p.groupPhoto].filter(Boolean).slice(0, 2).map((src, i) => (
+                        <img key={i} src={src as string} alt="Photo parcelle"
+                          className="w-10 h-10 rounded-md object-cover border" />
+                      ))}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold truncate">
+                        {p.code}{p.name ? ` · ${p.name}` : ""}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground truncate">{p.ownerName}</div>
+                      <div className="text-[10px] text-muted-foreground truncate">{hierarchie || "Hiérarchie incomplète"}</div>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="p-3 border-t">
+              <Link to="/app/parcelles/new" className="block text-center text-xs px-3 py-2 rounded-md border hover:bg-muted">
+                + Créer une nouvelle parcelle
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* BANDEAU PAUSE */}
       {paused && running && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 z-[500] px-3 py-1.5 rounded-full bg-warn text-white text-xs font-bold shadow-elevated animate-pulse">

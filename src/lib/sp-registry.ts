@@ -62,6 +62,7 @@ export async function ensureSpByName(name: string): Promise<{ sp: SP; created: b
   const d = db();
   const all = await d.sps.toArray();
   const found = findExistingSp(all, name);
+  console.debug("[sp-registry] ensureSpByName", { name, local: all.length, found: found?.code ?? null });
   if (found) {
     if (found.archivedAt) {
       await d.sps.update(found.id, { archivedAt: null });

@@ -201,35 +201,49 @@ function NewParcelleWizard() {
       {error && <div className="text-xs bg-destructive/10 text-destructive px-3 py-2 rounded-md">{error}</div>}
 
       {step === 1 && (
-        <Section title="1 · Localisation administrative" hint="District → Région → Département → Sous-Préfecture.">
-          <ComboField label="District" value={district} options={districtOptions}
-            placeholder="Sélectionner ou saisir un district"
-            onChange={(v) => {
-              setDistrict(v);
-              const r = regionsOfDistrict(v);
-              if (r.length && !r.includes(region)) { setRegion(r[0]); const dp = departementsOfRegion(r[0]); setDepartement(dp[0] ?? ""); }
-            }} />
-          <ComboField label="Région" value={region} options={regionOptions}
-            placeholder="Sélectionner ou saisir une région"
-            onChange={(v) => {
-              setRegion(v);
-              const dp = departementsOfRegion(v);
-              if (dp.length && !dp.includes(departement)) setDepartement(dp[0]);
-            }} />
-          <ComboField label="Département" value={departement} options={departementOptions}
-            placeholder="Sélectionner ou saisir un département"
-            onChange={setDepartement} />
-          <ComboField label="Sous-Préfecture" value={spName} options={spOptions}
-            onChange={pickSp} placeholder="Sélectionner ou saisir (ex : Daloa-Centre)" />
-          {matchingSp ? (
-            <div className="text-xs bg-success/10 text-success rounded-md px-3 py-2">
-              Sous-préfecture existante réutilisée : <b>{matchingSp.code} · {matchingSp.name}</b>
+        <Section title="1 · Sous-préfecture" hint="Sélectionnez la sous-préfecture : district, région et département sont remplis automatiquement.">
+          <Field label="Sous-Préfecture">
+            <SearchSelect
+              value={spName}
+              options={spOptions}
+              onChange={setSpName}
+              placeholder="Sélectionner une sous-préfecture"
+            />
+          </Field>
+
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={refreshSps} disabled={refreshing}
+              className="text-xs px-3 py-2 rounded-md border bg-background hover:bg-muted disabled:opacity-50">
+              {refreshing ? "Rafraîchissement…" : "↻ Rafraîchir depuis le cloud"}
+            </button>
+            {refreshMsg && <span className="text-[11px] text-muted-foreground">{refreshMsg}</span>}
+          </div>
+
+          {selectedSp && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+              <ReadOnly label="District" value={selectedSp.district} />
+              <ReadOnly label="Région" value={selectedSp.region} />
+              <ReadOnly label="Département" value={selectedSp.departement} />
             </div>
-          ) : spName.trim() ? (
+          )}
+
+          {selectedSp?.code ? (
+            <div className="text-xs bg-success/10 text-success rounded-md px-3 py-2">
+              Référence officielle existante : <b>{selectedSp.code} · {selectedSp.name}</b>
+            </div>
+          ) : selectedSp ? (
             <div className="text-xs bg-warn/10 text-warn rounded-md px-3 py-2">
-              Nouvelle sous-préfecture — elle sera créée et disponible dans la liste ensuite.
+              Premier déploiement sur cette sous-préfecture — la référence SP00X sera créée
+              automatiquement à l'enregistrement.
             </div>
           ) : null}
+
+          {(spBusy || spMsg) && (
+            <div className="text-xs flex items-center gap-2 rounded-md px-3 py-2 bg-muted">
+              {spBusy && <span className="w-3.5 h-3.5 rounded-full border-2 border-primary border-t-transparent animate-spin" />}
+              <span>{spMsg}</span>
+            </div>
+          )}
         </Section>
       )}
 

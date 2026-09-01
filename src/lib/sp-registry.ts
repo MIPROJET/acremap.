@@ -83,9 +83,11 @@ export async function ensureSpByName(name: string): Promise<{ sp: SP; created: b
   }
 
   const ref = findSpRef(name);
+  const nextCode = nextSequentialCode("SP", codes);
+  console.debug("[sp-registry] nouvelle référence SP", { name, codesConnus: codes.length, nextCode });
   const sp: SP = {
     id: crypto.randomUUID(),
-    code: nextSequentialCode("SP", codes),
+    code: nextCode,
     name: ref?.sp ?? name.trim(),
     district: ref?.district ?? "",
     region: ref?.region ?? "",

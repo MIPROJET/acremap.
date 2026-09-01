@@ -68,52 +68,38 @@ function NewParcelleWizard() {
     return { sps, domaines, parcelles };
   }, []);
 
-  // Listes déroulantes = référentiel officiel + tout ce qui a déjà été créé
-  const districtOptions = useMemo(
-    () => uniq([...listDistricts(), ...(existing?.sps.map((s) => s.district) ?? [])]),
-    [existing],
-  );
-  const regionOptions = useMemo(
-    () => uniq([
-      ...regionsOfDistrict(district),
-      ...(existing?.sps.filter((s) => !district || s.district === district).map((s) => s.region) ?? []),
-    ]),
-    [existing, district],
-  );
-  const departementOptions = useMemo(
-    () => uniq([
-      ...departementsOfRegion(region),
-      ...(existing?.sps.filter((s) => !region || s.region === region).map((s) => s.departement) ?? []),
-    ]),
-    [existing, region],
-  );
+  // Référentiel national + sous-préfectures déjà déployées
+  const spChoices = useMemo(() => buildSpChoices(existing?.sps ?? []), [existing]);
   const spOptions = useMemo(
-    () => uniq([
-      ...spsOfDepartement(departement),
-      ...(existing?.sps.filter((s) => !departement || s.departement === departement).map((s) => s.name) ?? []),
-    ]),
-    [existing, departement],
+    () => spChoices.map((c) => ({
+      value: c.name,
+      label: c.code ? `${c.code} · ${c.name}` : c.name,
+      hint: [c.departement, c.region, c.district].filter(Boolean).join(" · "),
+    })),
+    [spChoices],
+  );
+  const selectedSp = useMemo(
+    () => spChoices.find((c) => c.name === spName) ?? null,
+    [spChoices, spName],
   );
   const ownerOptions = useMemo(() => uniq(existing?.parcelles.map((p) => p.ownerName) ?? []), [existing]);
 
-  // SP existante candidate (nom identique dans le même département)
+  // SP déjà enregistrée (référence officielle existante)
   const matchingSp = useMemo(() => {
-    if (!existing) return null;
-    const n = spName.trim().toLowerCase();
-    if (!n) return null;
-    return existing.sps.find(
-      (s) => s.name.toLowerCase() === n && (!departement || s.departement === departement),
-    ) ?? null;
-  }, [existing, spName, departement]);
+    if (!existing || !selectedSp?.id) return null;
+    return existing.sps.find((s) => s.id === selectedSp.id) ?? null;
+  }, [existing, selectedSp]);
 
-  // Quand on choisit une SP déjà enregistrée, on remplit la hiérarchie automatiquement
-  function pickSp(v: string) {
-    setSpName(v);
-    const found = existing?.sps.find((s) => s.name.toLowerCase() === v.trim().toLowerCase());
-    if (found) {
-      if (found.district) setDistrict(found.district);
-      if (found.region) setRegion(found.region);
-      if (found.departement) setDepartement(found.departement);
+  async function refreshSps() {
+    setRefreshing(true);
+    setRefreshMsg(null);
+    try {
+      await pullFromCloud();
+      setRefreshMsg("Liste des sous-préfectures à jour.");
+    } catch {
+      setRefreshMsg("Rafraîchissement impossible (hors ligne ?).");
+    } finally {
+      setRefreshing(false);
     }
   }
 

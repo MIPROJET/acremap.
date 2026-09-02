@@ -126,3 +126,25 @@ export const resetUserPasswordAdmin = createServerFn({ method: "POST" })
 // dès qu'aucun admin n'existait. La promotion du premier administrateur doit
 // se faire manuellement en base (SQL Editor) ou via setUserRoleAdmin par un admin.
 
+
+// Mise à jour du profil (nom complet / identifiant) par un administrateur.
+export const updateUserAdmin = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({
+    userId: z.string().uuid(),
+    fullName: z.string().min(2),
+    username: z.string().min(2),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.supabase, context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await supabaseAdmin
+      .from("profiles")
+      .update({ full_name: data.fullName, username: data.username })
+      .eq("id", data.userId);
+    if (error) throw new Error(error.message);
+    await supabaseAdmin.auth.admin.updateUserById(data.userId, {
+      user_metadata: { full_name: data.fullName, username: data.username },
+    });
+    return { ok: true };
+  });

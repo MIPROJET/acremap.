@@ -18,6 +18,7 @@ const NAV: { to: string; label: string; short: string; icon: string; admin?: boo
   { to: "/app/traitement", label: "Traitement & morcellement", short: "Traiter", icon: "tree" },
   { to: "/app/hierarchie", label: "Hiérarchie", short: "Hiérarchie", icon: "tree" },
   { to: "/app/assistant", label: "Assistant IA", short: "IA", icon: "sparkle" },
+  { to: "/app/releves", label: "Relevés (historique)", short: "Relevés", icon: "check", admin: true },
   { to: "/app/validation", label: "Validation", short: "Valider", icon: "check", admin: true },
   { to: "/app/users", label: "Utilisateurs", short: "Comptes", icon: "users", admin: true },
 ];

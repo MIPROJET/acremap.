@@ -19,7 +19,9 @@ export const Route = createFileRoute("/login")({
       { name: "description", content: "Connexion à AcreMap : levé GPS, morcellement en lots d'1 ha et référencement des plantations." },
       { property: "og:title", content: "Connexion — AcreMap" },
       { property: "og:description", content: "Espace de travail terrain AgriCapital : mesurer, morceler, référencer." },
+      { property: "og:url", content: "https://acremap.agricapital.ci/login" },
     ],
+    links: [{ rel: "canonical", href: "https://acremap.agricapital.ci/login" }],
   }),
 });
 

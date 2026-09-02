@@ -109,7 +109,7 @@ function HierarchiePage() {
         <div className="flex gap-2">
           <button onClick={() => void refresh()} disabled={busy === "sync"}
             className="px-3 py-2 rounded-lg border text-sm font-medium disabled:opacity-50">
-            {busy === "sync" ? "Synchronisation…" : "↻ Actualiser"}
+            {busy === "sync" ? "Rafraîchissement…" : "↻ Rafraîchir depuis le cloud"}
           </button>
           <button onClick={() => setDeployOpen(true)}
             className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold">

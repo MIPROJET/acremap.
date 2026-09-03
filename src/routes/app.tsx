@@ -72,9 +72,14 @@ function AppLayout() {
     setNotifPerm(notificationPermission());
     initSync();
     startOfflineWarmup();
-    // Invalidation du cache Dexie au démarrage : la liste des SP reste alignée sur le cloud.
-    void syncAll().catch(() => {});
   }, []);
+
+  // Attendre la restauration de la session avant de lire le cloud : sinon les
+  // politiques RLS peuvent renvoyer un jeu vide qui diffère entre deux appareils.
+  useEffect(() => {
+    if (!hydrated || !user) return;
+    void syncAll().catch((error) => console.error("[sync] synchronisation initiale impossible", error));
+  }, [hydrated, user?.id]);
 
   if (!hydrated || !user) return null;
   const items = NAV.filter((n) => !n.admin || user.role === "admin");

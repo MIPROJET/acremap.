@@ -1,5 +1,5 @@
 // AcreMap Service Worker — hors ligne complet (app shell + assets + tuiles) + notifications
-const CACHE = "acremap-v5";
+const CACHE = "acremap-v6";
 const TILE_CACHE = "acremap-tiles-v1";
 const SHELL = ["/", "/login", "/app", "/manifest.webmanifest", "/favicon.png", "/icon-192.png", "/icon-512.png"];
 

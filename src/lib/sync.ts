@@ -166,11 +166,16 @@ export async function syncEntity(table: TableName, id: string): Promise<void> {
   else if (table === "measurements") { const r = await local.measurements.get(id); if (r) payload = mapMeasurement(r, userId); }
   else if (table === "lots") { const r = await local.lots.get(id); if (r) payload = mapLot(r, userId); }
   if (!payload) return;
-  if (navigator.onLine) {
-    try { await pushUpsert(table, payload); return; }
-    catch (e) { await enqueue(table, "upsert", id, payload); throw e; }
-  }
+  // Écrire d'abord dans la file durable : un changement de page ou une fermeture
+  // immédiate ne peut plus interrompre l'envoi avant sa mise en attente.
   await enqueue(table, "upsert", id, payload);
+  if (navigator.onLine) {
+    try {
+      await pushUpsert(table, payload);
+      await local.outbox.delete([table, id] as never);
+      return;
+    } catch (e) { throw e; }
+  }
 }
 
 // ---- Full migration from local IndexedDB to Supabase ----
@@ -232,36 +237,50 @@ export async function pullFromCloud(): Promise<PullResult> {
   const perTable: Record<string, number> = {};
   let total = 0;
 
-  const spsRes = await supabase.from("sps").select("*").limit(2000);
+  const pending = await local.outbox.toArray();
+  const pendingIds = (table: TableName) => new Set(pending.filter((o) => o.table === table).map((o) => o.id));
+
+  async function reconcile<T extends { id: string }>(
+    table: TableName,
+    localRows: T[],
+    cloudRows: T[],
+    bulkDelete: (ids: string[]) => Promise<unknown>,
+    bulkPut: (rows: T[]) => Promise<unknown>,
+  ) {
+    const cloudIds = new Set(cloudRows.map((row) => row.id));
+    const protectedIds = pendingIds(table);
+    const stale = localRows.filter((row) => !cloudIds.has(row.id) && !protectedIds.has(row.id)).map((row) => row.id);
+    if (stale.length) await bulkDelete(stale);
+    const safeCloudRows = cloudRows.filter((row) => !protectedIds.has(row.id));
+    if (safeCloudRows.length) await bulkPut(safeCloudRows);
+  }
+
+  const spsRes = await supabase.from("sps").select("*").limit(5000);
+  if (spsRes.error) throw spsRes.error;
   if (spsRes.data) {
     const rows: SP[] = spsRes.data.map((r) => ({
       id: r.id, code: r.code, name: r.name,
       district: r.district ?? "", region: r.region ?? "", departement: r.departement ?? "",
       notes: r.notes ?? undefined, archivedAt: r.archived_at ? ts(r.archived_at) : null, createdAt: ts(r.created_at),
     }));
-    // Purge des SP locales absentes du cloud (ancien cache de 519 lignes).
-    const cloudIds = new Set(rows.map((r) => r.id));
-    const pendingIds = new Set((await local.outbox.toArray()).filter((o) => o.table === "sps").map((o) => o.id));
-    const stale = (await local.sps.toArray())
-      .filter((s) => !cloudIds.has(s.id) && !pendingIds.has(s.id))
-      .map((s) => s.id);
-    if (stale.length) await local.sps.bulkDelete(stale);
-    await local.sps.bulkPut(rows);
+    await reconcile("sps", await local.sps.toArray(), rows, (ids) => local.sps.bulkDelete(ids), (items) => local.sps.bulkPut(items));
     perTable.sps = rows.length; total += rows.length;
   }
 
-  const domRes = await supabase.from("domaines").select("*").limit(1000);
+  const domRes = await supabase.from("domaines").select("*").limit(5000);
+  if (domRes.error) throw domRes.error;
   if (domRes.data) {
     const rows: Domaine[] = domRes.data.map((r) => ({
       id: r.id, code: r.code, name: r.name, spId: r.sp_id,
       description: r.description ?? undefined, notes: r.notes ?? undefined,
       archivedAt: r.archived_at ? ts(r.archived_at) : null, createdAt: ts(r.created_at),
     }));
-    await local.domaines.bulkPut(rows);
+    await reconcile("domaines", await local.domaines.toArray(), rows, (ids) => local.domaines.bulkDelete(ids), (items) => local.domaines.bulkPut(items));
     perTable.domaines = rows.length; total += rows.length;
   }
 
-  const parcRes = await supabase.from("parcelles").select("*").limit(1000);
+  const parcRes = await supabase.from("parcelles").select("*").limit(5000);
+  if (parcRes.error) throw parcRes.error;
   if (parcRes.data) {
     const rows: Parcelle[] = parcRes.data.map((r) => ({
       id: r.id, code: r.code, name: (r as { name?: string | null }).name ?? undefined,
@@ -273,11 +292,12 @@ export async function pullFromCloud(): Promise<PullResult> {
       parcellePhoto: r.parcelle_photo ?? undefined,
       notes: r.notes ?? undefined, archivedAt: r.archived_at ? ts(r.archived_at) : null, createdAt: ts(r.created_at),
     }));
-    await local.parcelles.bulkPut(rows);
+    await reconcile("parcelles", await local.parcelles.toArray(), rows, (ids) => local.parcelles.bulkDelete(ids), (items) => local.parcelles.bulkPut(items));
     perTable.parcelles = rows.length; total += rows.length;
   }
 
-  const mRes = await supabase.from("measurements").select("*").limit(1000);
+  const mRes = await supabase.from("measurements").select("*").limit(5000);
+  if (mRes.error) throw mRes.error;
   if (mRes.data) {
     const rows: Measurement[] = mRes.data.map((r) => ({
       id: r.id, parcelleId: r.parcelle_id ?? undefined,
@@ -293,11 +313,12 @@ export async function pullFromCloud(): Promise<PullResult> {
       qa: (r.qa ?? undefined) as Measurement["qa"],
       notes: r.notes ?? undefined,
     }));
-    await local.measurements.bulkPut(rows);
+    await reconcile("measurements", await local.measurements.toArray(), rows, (ids) => local.measurements.bulkDelete(ids), (items) => local.measurements.bulkPut(items));
     perTable.measurements = rows.length; total += rows.length;
   }
 
-  const lotRes = await supabase.from("lots").select("*").limit(2000);
+  const lotRes = await supabase.from("lots").select("*").limit(5000);
+  if (lotRes.error) throw lotRes.error;
   if (lotRes.data) {
     const rows: Lot[] = lotRes.data.map((r) => ({
       id: r.id, parcelleId: r.parcelle_id, measurementId: r.measurement_id ?? "",
@@ -307,7 +328,7 @@ export async function pullFromCloud(): Promise<PullResult> {
       assigneeName: r.assignee_name ?? undefined,
       assignedAt: r.assigned_at ? ts(r.assigned_at) : undefined,
     }));
-    await local.lots.bulkPut(rows);
+    await reconcile("lots", await local.lots.toArray(), rows, (ids) => local.lots.bulkDelete(ids), (items) => local.lots.bulkPut(items));
     perTable.lots = rows.length; total += rows.length;
   }
 
@@ -317,11 +338,14 @@ export async function pullFromCloud(): Promise<PullResult> {
 // ---- Suppression synchronisée (locale déjà faite par l'appelant) ----
 export async function syncDelete(table: TableName, id: string): Promise<void> {
   if (!isBrowser()) return;
-  if (navigator.onLine) {
-    try { await pushDelete(table, id); return; }
-    catch { await enqueue(table, "delete", id); return; }
-  }
   await enqueue(table, "delete", id);
+  if (navigator.onLine) {
+    try {
+      await pushDelete(table, id);
+      await db().outbox.delete([table, id] as never);
+      return;
+    } catch { return; }
+  }
 }
 
 /** Push best-effort, jamais bloquant pour l'UI (échec ⇒ file d'attente). */
@@ -337,8 +361,7 @@ export async function syncAll(): Promise<{ flushed: number; failed: number; pull
   if (!isBrowser() || !navigator.onLine) return { flushed: 0, failed: 0, pulled: 0, imports: 0 };
   const { ok, failed } = await flushOutbox();
   const imp = await flushImportQueue();
-  let pulled = 0;
-  try { pulled = (await pullFromCloud()).total; } catch { /* cache conservé */ }
+  const pulled = (await pullFromCloud()).total;
   return { flushed: ok, failed, pulled, imports: imp.ok };
 }
 

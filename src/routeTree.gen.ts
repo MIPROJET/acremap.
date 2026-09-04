@@ -18,6 +18,7 @@ import { Route as AppValidationRouteImport } from './routes/app.validation'
 import { Route as AppUsersRouteImport } from './routes/app.users'
 import { Route as AppTraitementRouteImport } from './routes/app.traitement'
 import { Route as AppRelevesRouteImport } from './routes/app.releves'
+import { Route as AppMorcellementRouteImport } from './routes/app.morcellement'
 import { Route as AppMeasureRouteImport } from './routes/app.measure'
 import { Route as AppImportRouteImport } from './routes/app.import'
 import { Route as AppHierarchieRouteImport } from './routes/app.hierarchie'
@@ -75,6 +76,11 @@ const AppTraitementRoute = AppTraitementRouteImport.update({
 const AppRelevesRoute = AppRelevesRouteImport.update({
   id: '/releves',
   path: '/releves',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMorcellementRoute = AppMorcellementRouteImport.update({
+  id: '/morcellement',
+  path: '/morcellement',
   getParentRoute: () => AppRoute,
 } as any)
 const AppMeasureRoute = AppMeasureRouteImport.update({
@@ -159,6 +165,7 @@ export interface FileRoutesByFullPath {
   '/app/hierarchie': typeof AppHierarchieRoute
   '/app/import': typeof AppImportRoute
   '/app/measure': typeof AppMeasureRoute
+  '/app/morcellement': typeof AppMorcellementRoute
   '/app/releves': typeof AppRelevesRoute
   '/app/traitement': typeof AppTraitementRoute
   '/app/users': typeof AppUsersRoute
@@ -182,6 +189,7 @@ export interface FileRoutesByTo {
   '/app/hierarchie': typeof AppHierarchieRoute
   '/app/import': typeof AppImportRoute
   '/app/measure': typeof AppMeasureRoute
+  '/app/morcellement': typeof AppMorcellementRoute
   '/app/releves': typeof AppRelevesRoute
   '/app/traitement': typeof AppTraitementRoute
   '/app/users': typeof AppUsersRoute
@@ -207,6 +215,7 @@ export interface FileRoutesById {
   '/app/hierarchie': typeof AppHierarchieRoute
   '/app/import': typeof AppImportRoute
   '/app/measure': typeof AppMeasureRoute
+  '/app/morcellement': typeof AppMorcellementRoute
   '/app/releves': typeof AppRelevesRoute
   '/app/traitement': typeof AppTraitementRoute
   '/app/users': typeof AppUsersRoute
@@ -233,6 +242,7 @@ export interface FileRouteTypes {
     | '/app/hierarchie'
     | '/app/import'
     | '/app/measure'
+    | '/app/morcellement'
     | '/app/releves'
     | '/app/traitement'
     | '/app/users'
@@ -256,6 +266,7 @@ export interface FileRouteTypes {
     | '/app/hierarchie'
     | '/app/import'
     | '/app/measure'
+    | '/app/morcellement'
     | '/app/releves'
     | '/app/traitement'
     | '/app/users'
@@ -280,6 +291,7 @@ export interface FileRouteTypes {
     | '/app/hierarchie'
     | '/app/import'
     | '/app/measure'
+    | '/app/morcellement'
     | '/app/releves'
     | '/app/traitement'
     | '/app/users'
@@ -366,6 +378,13 @@ declare module '@tanstack/react-router' {
       path: '/releves'
       fullPath: '/app/releves'
       preLoaderRoute: typeof AppRelevesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/morcellement': {
+      id: '/app/morcellement'
+      path: '/morcellement'
+      fullPath: '/app/morcellement'
+      preLoaderRoute: typeof AppMorcellementRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/measure': {
@@ -469,6 +488,7 @@ interface AppRouteChildren {
   AppHierarchieRoute: typeof AppHierarchieRoute
   AppImportRoute: typeof AppImportRoute
   AppMeasureRoute: typeof AppMeasureRoute
+  AppMorcellementRoute: typeof AppMorcellementRoute
   AppRelevesRoute: typeof AppRelevesRoute
   AppTraitementRoute: typeof AppTraitementRoute
   AppUsersRoute: typeof AppUsersRoute
@@ -486,6 +506,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppHierarchieRoute: AppHierarchieRoute,
   AppImportRoute: AppImportRoute,
   AppMeasureRoute: AppMeasureRoute,
+  AppMorcellementRoute: AppMorcellementRoute,
   AppRelevesRoute: AppRelevesRoute,
   AppTraitementRoute: AppTraitementRoute,
   AppUsersRoute: AppUsersRoute,

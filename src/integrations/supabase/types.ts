@@ -118,6 +118,8 @@ export type Database = {
         Row: {
           area_m2: number
           assigned_at: string | null
+          assignee_account: string | null
+          assignee_contact: string | null
           assignee_name: string | null
           bornes: Json | null
           code: string
@@ -125,14 +127,21 @@ export type Database = {
           created_by: string | null
           id: string
           is_reserve: boolean
+          kind: string
+          label: string | null
           measurement_id: string | null
           parcelle_id: string
+          part: string
+          plan_id: string | null
           polygon: Json
+          target_area_m2: number | null
           updated_at: string
         }
         Insert: {
           area_m2?: number
           assigned_at?: string | null
+          assignee_account?: string | null
+          assignee_contact?: string | null
           assignee_name?: string | null
           bornes?: Json | null
           code: string
@@ -140,14 +149,21 @@ export type Database = {
           created_by?: string | null
           id?: string
           is_reserve?: boolean
+          kind?: string
+          label?: string | null
           measurement_id?: string | null
           parcelle_id: string
+          part?: string
+          plan_id?: string | null
           polygon?: Json
+          target_area_m2?: number | null
           updated_at?: string
         }
         Update: {
           area_m2?: number
           assigned_at?: string | null
+          assignee_account?: string | null
+          assignee_contact?: string | null
           assignee_name?: string | null
           bornes?: Json | null
           code?: string
@@ -155,9 +171,14 @@ export type Database = {
           created_by?: string | null
           id?: string
           is_reserve?: boolean
+          kind?: string
+          label?: string | null
           measurement_id?: string | null
           parcelle_id?: string
+          part?: string
+          plan_id?: string | null
           polygon?: Json
+          target_area_m2?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -173,6 +194,13 @@ export type Database = {
             columns: ["parcelle_id"]
             isOneToOne: false
             referencedRelation: "parcelles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lots_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "morcellement_plans"
             referencedColumns: ["id"]
           },
         ]
@@ -235,6 +263,72 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "measurements_parcelle_id_fkey"
+            columns: ["parcelle_id"]
+            isOneToOne: false
+            referencedRelation: "parcelles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      morcellement_plans: {
+        Row: {
+          config: Json
+          conforme: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          measurement_id: string | null
+          notes: string | null
+          parcelle_id: string
+          reference: string | null
+          score: Json
+          status: string
+          target_m2: number
+          total_m2: number
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          conforme?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          measurement_id?: string | null
+          notes?: string | null
+          parcelle_id: string
+          reference?: string | null
+          score?: Json
+          status?: string
+          target_m2?: number
+          total_m2?: number
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          conforme?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          measurement_id?: string | null
+          notes?: string | null
+          parcelle_id?: string
+          reference?: string | null
+          score?: Json
+          status?: string
+          target_m2?: number
+          total_m2?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "morcellement_plans_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "measurements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "morcellement_plans_parcelle_id_fkey"
             columns: ["parcelle_id"]
             isOneToOne: false
             referencedRelation: "parcelles"

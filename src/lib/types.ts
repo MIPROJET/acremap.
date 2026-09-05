@@ -87,6 +87,30 @@ export interface Lot {
   isReserve?: boolean;
   assigneeName?: string;
   assignedAt?: number;
+  // --- Morcellement intelligent ---
+  planId?: string | null;
+  part?: "ac" | "proprietaire";
+  kind?: "lot" | "reserve" | "collecte";
+  label?: string;
+  targetAreaM2?: number;
+  assigneeContact?: string;
+  assigneeAccount?: string;
+}
+
+/** Plan de morcellement enregistré (configuration + scores). */
+export interface MorcPlan {
+  id: string;
+  parcelleId: string;
+  measurementId?: string | null;
+  reference?: string;
+  config: unknown;
+  score: unknown;
+  targetM2: number;
+  totalM2: number;
+  conforme: boolean;
+  status: "draft" | "validated" | "archived";
+  notes?: string;
+  createdAt: number;
 }
 
 export interface DeviceProfile {

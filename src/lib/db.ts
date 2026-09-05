@@ -1,9 +1,9 @@
 import Dexie, { type Table } from "dexie";
-import type { Domaine, Lot, Measurement, Parcelle, SP, User } from "./types";
+import type { Domaine, Lot, Measurement, MorcPlan, Parcelle, SP, User } from "./types";
 
 export interface OutboxEntry {
   id: string;            // entity id (uuid)
-  table: "sps" | "domaines" | "parcelles" | "measurements" | "lots";
+  table: "sps" | "domaines" | "parcelles" | "measurements" | "lots" | "morcellement_plans";
   op: "upsert" | "delete";
   payload?: unknown;     // serialized row (for upsert)
   ts: number;
@@ -30,6 +30,7 @@ class AcreDB extends Dexie {
   meta!: Table<{ key: string; value: unknown }, string>;
   outbox!: Table<OutboxEntry, string>;
   importQueue!: Table<QueuedImport, string>;
+  plans!: Table<MorcPlan, string>;
 
   constructor() {
     super("acremap");
@@ -82,6 +83,19 @@ class AcreDB extends Dexie {
       meta: "key",
       outbox: "[table+id], table, ts",
       importQueue: "id, ts",
+    });
+    // v6 — plans de morcellement (configuration + scores) synchronisés
+    this.version(6).stores({
+      users: "id, username, role",
+      sps: "id, code, district, region, departement",
+      domaines: "id, code, spId",
+      parcelles: "id, code, domaineId, ownerName",
+      measurements: "id, status, parcelleId, createdBy, createdAt",
+      lots: "id, parcelleId, measurementId, planId, code",
+      meta: "key",
+      outbox: "[table+id], table, ts",
+      importQueue: "id, ts",
+      plans: "id, parcelleId, createdAt",
     });
   }
 }
